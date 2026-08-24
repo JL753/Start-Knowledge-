@@ -33,7 +33,7 @@
 ```bash
 # 1. 克隆
 git clone <repo-url>
-cd Kuromi-main
+cd xingshi
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -117,7 +117,7 @@ API 文档：**http://127.0.0.1:8000/docs**
 ## 项目结构
 
 ```
-Kuromi-main/
+xingshi/
 ├── main.py                    # FastAPI 应用入口
 ├── db.py                      # 传统 pymysql 数据库操作（用户、进度等）
 ├── state.py                   # Pydantic 数据模型

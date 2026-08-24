@@ -1,7 +1,7 @@
 # P1 Runbook — Production Operations
 
 > **Audience:** on-call engineers and SREs responsible for the
-> Kuromi / star-learn production deployment after the S1–S12
+> xingshi (星识) production deployment after the S1–S12
 > rollout (P1 close-out). Read this before going on-call.
 >
 > **Scope:** this runbook covers everything the original spec §B6

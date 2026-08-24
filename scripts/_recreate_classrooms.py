@@ -7,8 +7,9 @@ conversation, so we re-create it whenever we need it.
 import json
 import os
 import sys
+from pathlib import Path
 
-BASE = r"c:/Users/ZWC/Downloads/Kuromi-main/Kuromi-main/storage/seed/demo"
+BASE = str(Path(__file__).resolve().parent.parent / "storage" / "seed" / "demo")
 CR = os.path.join(BASE, "classrooms")
 os.makedirs(CR, exist_ok=True)
 

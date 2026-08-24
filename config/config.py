@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # Use app-specific env names so a global DEBUG variable does not override us.
     debug: bool = Field(
         default=False,
-        validation_alias=AliasChoices("KUROMI_DEBUG", "APP_DEBUG"),
+        validation_alias=AliasChoices("XINGSHI_DEBUG", "APP_DEBUG"),
     )
 
     # ── 学习路径目标真实性校验（real-time 校验开关） ──

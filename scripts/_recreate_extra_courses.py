@@ -1,8 +1,9 @@
 """Re-create extra_courses.json with all 5 courses, 27 chapters, 27 subchapters."""
 import json
 import os
+from pathlib import Path
 
-BASE = r"c:/Users/ZWC/Downloads/Kuromi-main/Kuromi-main/storage/seed/demo"
+BASE = str(Path(__file__).resolve().parent.parent / "storage" / "seed" / "demo")
 
 # All 5 courses
 courses = [

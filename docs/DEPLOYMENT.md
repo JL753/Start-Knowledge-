@@ -263,7 +263,7 @@ KB_REDIS_PORT=6379
 
 # ─── 应用 ───
 APP_DEBUG=False
-KUROMI_DEBUG=False
+XINGSHI_DEBUG=False
 ```
 
 完整变量清单见本文档 [附录 A](#十附录环境变量清单)。
@@ -965,7 +965,7 @@ sudo firewall-cmd --reload
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `APP_DEBUG` / `KUROMI_DEBUG` | 否 | 默认 `False` |
+| `APP_DEBUG` / `XINGSHI_DEBUG` | 否 | 默认 `False` |
 | `STARLEARN_USER_ENV` | 否 | 自定义 .env 路径（打包安装器使用） |
 
 ---

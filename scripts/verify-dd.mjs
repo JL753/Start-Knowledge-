@@ -1,8 +1,9 @@
 import { chromium } from 'playwright';
 import { mkdir } from 'fs/promises';
+import path from 'path';
 
 const URL = 'http://localhost:8765/data-dashboard.html';
-const OUT = 'C:/Users/zwc/Downloads/Kuromi-main/Kuromi-main/verify-dd-out';
+const OUT = path.join(process.cwd(), 'verify-dd-out');
 
 async function run() {
     await mkdir(OUT, { recursive: true });
