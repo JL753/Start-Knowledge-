@@ -19,7 +19,7 @@ def _read(path: str) -> str:
 
 
 def _slice_status() -> str:
-    return _read("docs/SLICE_STATUS.md")
+    return _read("docs/数据库迁移切片状态.md")
 
 
 def _adr_recent(days: int = 30) -> str:

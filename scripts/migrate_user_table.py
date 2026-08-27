@@ -1,7 +1,7 @@
 """Final user table unification: merge db.py 'user' (INT PK) into ORM 'users' (VARCHAR PK).
 
 WARNING: This is the most dangerous script in the entire database merge.
-Run only after M1-M10 are complete and SLICE_STATUS.md shows all slices done.
+Run only after M1-M10 are complete and 数据库迁移切片状态.md shows all slices done.
 
 Features:
   --dry-run: Print all operations without executing

@@ -38,7 +38,7 @@ CONV_PATH = Path(__file__).parent / "conversations.jsonl"
 
 # Spec thresholds (slice-B6). Tightened from the B3 placeholders
 # (>= 0.0). These match the parity contract documented in
-# docs/runbook-p1.md §10.6.
+# docs/P1运维手册.md §10.6.
 THRESHOLD_CITATION_OVERLAP = 0.85
 THRESHOLD_BLOCK_DIFF = 0.05
 THRESHOLD_LATENCY_P99_MULTIPLIER = 1.20
@@ -90,7 +90,7 @@ def _skip_if_no_real_data() -> list[dict]:
             "conversations.jsonl has only empty a_langchain stubs — "
             "parity thresholds are tightened but not exercised until "
             "real LangChain answers are written to the fixture. "
-            "See docs/runbook-p1.md §10.6 for the parity contract."
+            "See docs/P1运维手册.md §10.6 for the parity contract."
         )
     return pairs
 
@@ -128,7 +128,7 @@ def _new_response_stub(q: str) -> MagicMock:
 def test_citation_parity() -> None:
     """Citation overlap between legacy and new paths > 85%.
 
-    Spec: per docs/runbook-p1.md §10.6, the new LangChain path
+    Spec: per docs/P1运维手册.md §10.6, the new LangChain path
     must cite at least 85% of the KB-node ids the legacy path
     cited for the same question.
     """
