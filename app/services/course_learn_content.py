@@ -338,9 +338,34 @@ async def _generate_all(
             ],
         }
 
-    exercises = data.get("exercises") or []
-    exercises = [e for e in exercises if isinstance(e, dict) and e.get("question")]
-    for e in exercises:
+    exercises = _normalize_exercises(data.get("exercises") or [])
+
+    # 骨架兜底: 至少保证 1 道题, 不让练习面板完全空
+    if is_skeleton and not exercises:
+        exercises = [{
+            "type": "fill",
+            "question": f"请用一句话描述本节(《{subchapter_title or '本节'}》)最核心的知识点",
+            "answer": "(自由作答, 由系统/教师点评)",
+            "explanation": "本节目前缺少字幕/讲义, 题目为开放题;字幕就绪后将自动替换为标准练习。",
+        }]
+
+    return {
+        "transcript": transcript,
+        "concepts": concepts,
+        "mindMap": mindmap,
+        "exercises": exercises,
+    }
+
+
+def _normalize_exercises(raw: list[Any]) -> list[dict[str, Any]]:
+    """把 LLM / 预置数据里的练习题列表规范成前端可用的形状.
+
+    无效项 (非 dict / 无题干 / choice 缺选项) 直接丢弃, 避免前端渲染崩溃.
+    """
+    out: list[dict[str, Any]] = []
+    for e in raw:
+        if not isinstance(e, dict) or not e.get("question"):
+            continue
         e.setdefault("type", "choice")
         if e["type"] not in ("choice", "bool", "fill"):
             e["type"] = "choice"
@@ -358,22 +383,8 @@ async def _generate_all(
         else:
             e["answer"] = str(e.get("answer", ""))
         e.setdefault("explanation", "")
-
-    # 骨架兜底: 至少保证 1 道题, 不让练习面板完全空
-    if is_skeleton and not exercises:
-        exercises = [{
-            "type": "fill",
-            "question": f"请用一句话描述本节(《{subchapter_title or '本节'}》)最核心的知识点",
-            "answer": "(自由作答, 由系统/教师点评)",
-            "explanation": "本节目前缺少字幕/讲义, 题目为开放题;字幕就绪后将自动替换为标准练习。",
-        }]
-
-    return {
-        "transcript": transcript,
-        "concepts": concepts,
-        "mindMap": mindmap,
-        "exercises": exercises,
-    }
+        out.append(e)
+    return out
 
 
 def _strip_md(text: str) -> str:
@@ -559,6 +570,27 @@ def _exercises_from_lecture(lecture: dict[str, Any],
     return exercises
 
 
+def _concepts_from_curated(lecture: dict[str, Any]) -> list[dict[str, Any]]:
+    """读取预置在 lecture JSON 里的 concepts; 无有效项时返回空列表."""
+    items = lecture.get("concepts")
+    if not isinstance(items, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for c in items:
+        if not isinstance(c, dict) or not (c.get("term") or "").strip():
+            continue
+        lvl = c.get("level")
+        if lvl not in ("core", "basic", "advanced"):
+            lvl = "basic"
+        out.append({
+            "term": str(c["term"]).strip(),
+            "level": lvl,
+            "definition": str(c.get("definition") or ""),
+            "example": (str(c["example"]).strip() or None) if c.get("example") else None,
+        })
+    return out
+
+
 def _build_from_seeded(
     lecture_obj: dict[str, Any] | None,
     mindmap_obj: dict[str, Any] | None,
@@ -575,11 +607,14 @@ def _build_from_seeded(
 
     concepts: list[dict[str, Any]] = []
     if isinstance(lecture_obj, dict):
-        concepts = _concepts_from_lecture(lecture_obj)
+        # 预置的 concepts 优先; 没有再从标题启发式抽取
+        concepts = _concepts_from_curated(lecture_obj) or _concepts_from_lecture(lecture_obj)
 
     exercises: list[dict[str, Any]] = []
     if isinstance(lecture_obj, dict):
-        exercises = _exercises_from_lecture(lecture_obj, sub_title)
+        # 预置的 exercises 优先; 没有再走启发式合成
+        exercises = _normalize_exercises(lecture_obj.get("exercises") or []) \
+            or _exercises_from_lecture(lecture_obj, sub_title)
     elif isinstance(mindmap_obj, dict):
         # 仅有 mindmap 的兜底
         exercises.append({

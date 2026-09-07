@@ -18,6 +18,7 @@ POST   /api/courses/import-playlist   -> import Bilibili playlist as course
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -31,6 +32,7 @@ from app.services.course_service import (
     delete_subject,
     get_course,
     get_subchapter,
+    find_subchapter_by_page,
     create_course,
     update_course,
     delete_course,
@@ -264,6 +266,12 @@ async def get_subchapter_content(course_id: str, subchapter_id: str, refresh: bo
     if not course:
         raise HTTPException(status_code=404, detail="课程不存在")
     subchapter = await get_subchapter(subchapter_id)
+    if not subchapter:
+        # 前端用 B 站分 P 重排目录时, 小节 id 形如 "sub-3";
+        # 按分 P 序号在本课程内兜底解析, 避免内容四件套直接 404
+        m = re.fullmatch(r"sub-(\d+)", subchapter_id)
+        if m:
+            subchapter = await find_subchapter_by_page(course_id, int(m.group(1)))
     if not subchapter:
         raise HTTPException(status_code=404, detail="章节不存在")
 

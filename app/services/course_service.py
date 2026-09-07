@@ -241,3 +241,25 @@ async def get_subchapter(subchapter_id: str) -> SubChapter | None:
             )
         )
         return result.scalar_one_or_none()
+
+
+async def find_subchapter_by_page(course_id: str, page: int) -> SubChapter | None:
+    """按 B 站分 P 序号在本课程范围内解析小节.
+
+    前端在子章节 cid 为空时会用 B 站分 P 重排目录, 小节 id 形如 "sub-3";
+    本函数让这类 id 也能命中后端小节, 讲义/导图等内容不至于 404.
+    命中规则: page 完全相等的小节; 否则取 page <= N 中最大的那个
+    (即"覆盖该分 P 的章节锚点").
+    """
+    async with get_sessionmaker()() as session:
+        result = await session.execute(
+            select(SubChapter)
+            .join(Chapter, SubChapter.chapter_id == Chapter.id)
+            .where(Chapter.course_id == course_id, SubChapter.page <= page)
+            .options(
+                selectinload(SubChapter.chapter).selectinload(Chapter.course)
+            )
+            .order_by(SubChapter.page.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()

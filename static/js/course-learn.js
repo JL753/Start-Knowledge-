@@ -50,6 +50,7 @@
   var dragStartY        = 0;
   var currentMindMap    = null;  // 当前 mindmap 数据, 用于切换步骤时重渲染
   var currentExercises  = [];    // 当前练习, 用于重置答卷时重渲染
+  var backendTreeReady  = false; // 后端已返回可用章节树: 不再让 B 站解析结果覆盖
 
   /* ===================== AI 视频生成状态 ===================== */
   var aiVideoState = { taskId: null, status: null, pollTimer: null };
@@ -145,21 +146,24 @@
           document.getElementById('cl-course-title').textContent = course.title;
           document.getElementById('cl-welcome-title-text').textContent = course.title;
 
-          // 如果课程有 bvid 但子章节 cid 为空（seeder 导入的课程），
-          // 从 B站 API 补全章节结构
+          // 如果课程有 bvid 但后端树完全不可用（无任何小节），
+          // 才退回 B站 API 补全章节结构
           if (course.bvid) {
-            var hasEmptyCids = chapters.every(function (ch) {
-              return ch.children.every(function (sc) { return !sc.cid; });
+            var noSubs = chapters.every(function (ch) {
+              return !ch.children || ch.children.length === 0;
             });
-            if (hasEmptyCids) {
+            if (noSubs) {
               loadBilibiliChapters(course.bvid);
               return; // loadBilibiliChapters 内部会调用 renderChapterTree + selectChapter
             }
           }
 
+          // 后端树可用: 锁定它, 防止更早发出的 B站解析请求晚到后覆盖
+          backendTreeReady = true;
           renderChapterTree();
           var start = findStartIndex();
-          if (chapters.length > 0) selectChapter(start, 0);
+          if (start >= chapters.length) start = 0;
+          if (chapters.length > 0 && start < chapters.length) selectChapter(start, 0);
         }
       })
       .catch(function () { /* silent fail */ });
@@ -198,6 +202,9 @@
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
+        // 后端章节树已就位: 本次解析只是「兜底」, 丢弃结果避免覆盖
+        if (backendTreeReady) return;
+
         if (res && res.code === 200 && res.data) {
           var videoData = res.data;
           var pages = videoData.pages || [];
@@ -249,6 +256,9 @@
         }
       })
       .catch(function () {
+        // 后端章节树已就位: 解析失败也不再降级覆盖
+        if (backendTreeReady) return;
+
         // 兜底章节
         chapters = [{
           id: 'ch-1',
@@ -750,11 +760,11 @@
       return;
     }
 
-    // 递归布局: 根节点居中, 子节点左右展开
-    // 用视口实际尺寸作为画布, 这样节点就一定落在可见区域
+    // Tidy-tree 布局: 根节点居中, 一级分支左右展开.
+    // 每个叶子独占一行 (ROW_H), 父节点取各子节点 y 的均值 —— 天然不重叠.
+    // 画布高度按行数推算, 超出视口时自动缩小并垂直居中.
     // 视口在 display:none 时尺寸为 0, 必须先用 CSS min 兜底再读尺寸
     if (viewport) {
-      // 强制让视口"可测量": 临时给它一个最小高度, 即使父面板还没激活
       if (viewport.clientHeight === 0) {
         viewport.style.minHeight = '320px';
       }
@@ -762,66 +772,80 @@
     var vw = (viewport ? viewport.clientWidth : 800) || 800;
     var vh = (viewport ? viewport.clientHeight : 320) || 320;
     var W = Math.max(640, vw);
-    var H = Math.max(320, vh);
     var root = data;
-    var nodes = [];
-    var lines = [];
+    var ROW_H = 46;
+    var PAD_TOP = 24;
+    var COL = [0, 180, 150, 130, 120];  // 各层相对父级的横向步进
 
-    // 先把根的子节点分成左右两侧
-    var sideMap = {};
-    if (root.children && root.children.length > 0) {
-      var half = Math.ceil(root.children.length / 2);
-      root.children.forEach(function (c, i) {
-        sideMap[i] = i < half ? 1 : -1;
-      });
-    }
+    // 1. 一级分支分左右两侧
+    var kids = root.children || [];
+    var half = Math.ceil(kids.length / 2);
+    var rightSide = kids.slice(0, half);
+    var leftSide = kids.slice(half);
+    var sideOf = {};
+    kids.forEach(function (c, i) { sideOf[c.name] = i < half ? 1 : -1; });
 
-    // 单次递归: 走遍整棵树, 用 sideMap 决定一级节点的左右
-    function walk(node, depth, side, parentX, parentY) {
-      var x, y;
-      if (depth === 0) {
-        x = W / 2; y = H / 2;
-      } else {
-        var siblings = node._siblings || 1;
-        var idx = node._idxInSiblings || 0;
-        var range = Math.min(H - 80, siblings * 56);
-        var offset = siblings > 1 ? (idx / (siblings - 1) - 0.5) * range : 0;
-        y = parentY + offset;
-        if (depth === 1) {
-          x = parentX + side * 160;
+    // 2. 自上而下分配叶子行号: 右侧先占, 中间留一空行给根, 再排左侧
+    var slot = 0;
+    function assignLeafSlots(list) {
+      (list || []).forEach(function walk(n) {
+        if (n.children && n.children.length) {
+          n.children.forEach(walk);
         } else {
-          x = parentX + side * 130;
+          n._slot = slot++;
         }
-        // 夹紧到画布内
-        x = Math.max(60, Math.min(W - 60, x));
-        y = Math.max(20, Math.min(H - 20, y));
-      }
-      node._x = x; node._y = y;
-      node._depth = depth;
-      nodes.push({ x: x, y: y, name: node.name, depth: depth });
-
-      if (node.children) {
-        for (var i = 0; i < node.children.length; i++) {
-          var child = node.children[i];
-          child._parent = node;
-          child._siblings = node.children.length;
-          child._idxInSiblings = i;
-          // 二级以下沿用父节点的方向
-          walk(child, depth + 1, side, x, y);
-        }
-      }
-    }
-    root._parent = null;
-    walk(root, 0, 0, W / 2, H / 2);
-    // 一级节点按 sideMap 走第二遍覆盖位置
-    if (root.children) {
-      root.children.forEach(function (c, i) {
-        // 注意: 不要再设 c._parent = root, 否则会丢失
-        walk(c, 1, sideMap[i], W / 2, H / 2);
       });
+    }
+    assignLeafSlots(rightSide);
+    var rightLeaves = slot;
+    slot += 1;  // 根节点占用的中间行
+    assignLeafSlots(leftSide);
+
+    var totalRows = Math.max(slot, 3);
+    var H = Math.max(280, PAD_TOP * 2 + totalRows * ROW_H);
+
+    // 3. 自下而上: 叶子 y 取自身行, 父节点 y 取子节点均值
+    function layoutY(list) {
+      (list || []).forEach(function walk(n) {
+        if (n.children && n.children.length) {
+          n.children.forEach(walk);
+          var sum = 0;
+          n.children.forEach(function (c) { sum += c._y; });
+          n._y = sum / n.children.length;
+        } else {
+          n._y = PAD_TOP + n._slot * ROW_H + ROW_H / 2;
+        }
+      });
+    }
+    layoutY(rightSide);
+    layoutY(leftSide);
+
+    // 4. 横向: 按深度向左右展开, 根节点居中占中间空行
+    root._x = W / 2;
+    root._y = PAD_TOP + rightLeaves * ROW_H + ROW_H / 2;
+    root._depth = 0;
+    root._parent = null;
+    function layoutX(list, side) {
+      function walk(n, parentX, depth) {
+        var step = COL[Math.min(depth, COL.length - 1)] || 120;
+        var x = depth === 1 ? root._x + side * step : parentX + side * step;
+        n._x = Math.max(70, Math.min(W - 70, x));
+        n._depth = depth;
+        (n.children || []).forEach(function (c) {
+          c._parent = n;
+          walk(c, n._x, depth + 1);
+        });
+      }
+      (list || []).forEach(function (n) { walk(n, root._x, 1); });
+    }
+    layoutX(rightSide, 1);
+    layoutX(leftSide, -1);
+    if (root.children) {
+      root.children.forEach(function (c) { c._parent = root; });
     }
 
     // 生成 SVG + 节点
+    stage.style.height = H + 'px';
     var svgHtml = '<svg width="' + W + '" height="' + H + '" style="position:absolute;left:0;top:0;pointer-events:none;overflow:visible;">';
     function drawLines(node) {
       if (node._parent) {
@@ -852,6 +876,14 @@
       '<span><i style="background:#666"></i>细节</span>' +
       '</div>';
 
+    // 适配视口: 内容高于视口时整体缩小, 并垂直居中
+    mindmapZoom = 1;
+    mindmapOffsetX = 0;
+    mindmapOffsetY = 0;
+    if (H > vh) {
+      mindmapZoom = Math.max(0.45, vh / H);
+    }
+    mindmapOffsetY = Math.max(0, (vh - H * mindmapZoom) / 2);
     applyMindMapTransform();
     markStepCompleted('mindmap');
   }

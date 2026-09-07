@@ -112,4 +112,4 @@ packaging/app_payload/
 packaging/python/
 
 # codex 缓存
-.codex/
+.codex/evaluation/results/
